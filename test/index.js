@@ -1,14 +1,20 @@
+'use strict';
+
 const app = require('../app');
 
 const supertest = require('supertest');
 const chai = require('chai');
 const expect = chai.expect;
-const should = chai.should;
+const should = chai.should();
 
 const api = supertest('http://localhost:3000');
 
 let login = null;
 let users = null;
+let accounts = null;
+let userID = [];
+let wrongToken = 'wrong token';
+
 describe('Tests', () => {
 
 	// Check if Homepage si properly displayed and has status 200
@@ -18,6 +24,50 @@ describe('Tests', () => {
 				expect(res.text).to.be.equal('Hello World!');
 				expect(res.statusCode).to.be.equal(200);
 				done();
+			}).
+			catch(done);
+	});
+
+	// Test logging in with wrong password
+	it('Bad log in - wrong password', (done) => {
+		api.post('/sign-in')
+			.send({
+				password: 'wrong-password',
+				email: 'email',
+			})
+			.then((res) => {
+				expect(res.body).to.have.property("error", true);
+				expect(res.body).not.to.have.property("access_token", res.body.access_token);
+				done();	
+			}).
+			catch(done);
+	});
+
+	// Test logging in with wrong email
+	it('Bad log in - wrong email', (done) => {
+		api.post('/sign-in')
+			.send({
+				password: 'password',
+				email: 'wrong-email',
+			})
+			.then((res) => {
+				expect(res.body).not.to.have.property("access_token", res.body.access_token);
+				done();	
+			}).
+			catch(done);
+	});
+
+	// Test logging in with wrong password AND email
+	it('Bad log in - wrong email and wrong password', (done) => {
+		api.post('/sign-in')
+			.send({
+				password: '',
+				email: '',
+			})
+			.then((res) => {
+				expect(res.body).to.have.property("error", true);
+				expect(res.body).not.to.have.property("access_token", res.body.access_token);
+				done();	
 			}).
 			catch(done);
 	});
@@ -43,16 +93,19 @@ describe('Tests', () => {
 			.then((res) => {
 				// we expect that there is 6 users. You can check/confirm that in app code.
 				expect(res.body.length).to.be.equal(6);
-				done();
+				for(var i = 0; i < res.body.length; i++) {
+					userID[i] = res.body[i].user_id;
+                }
+                done();
 			}).
 		catch(done);
 	});
 
-	// Correct response format for all users
-	for (var users = 1; users < 7; users++) {
-		(function (users) {
+	// Testing correct response format for all users
+	for (var i = 0; i < 6; i++) {
+		(function (i) {
 			it('Correct response format for all users', (done) => {
-				api.get('/users/' + users)
+				api.get('/users/' + userID[i])
 					.set('authorization', login)
 					.then((res) => {
 						expect(res.text).to.contain("user_id");
@@ -63,14 +116,27 @@ describe('Tests', () => {
 					}).
 					catch(done);
 			});
-		})(users);
+		})(i);
 	}
 
+	// Testing with wrong token
+	it('Unable to get user list with wrong token', (done) => {
+		api.get('/users')
+			.set('authorization', wrongToken)
+			.then((res) => {
+				expect(res.body).to.have.property("error", true);
+				expect(res.body).to.have.property("message", "Missing authorization token");
+				done();
+			}).
+		catch(done);
+	});
+
+
 	// Response format for user accounts
-	for (var accounts = 1; accounts < 5; accounts++) {
-		(function (accounts) {
-			it('Correct format for users that have accounts', (done) => {
-				api.get('/users/' + accounts + '/accounts')
+	for (var i = 0; i < 4; i++) {
+		(function (i) {
+			it('Correct response format for all accounts', (done) => {
+				api.get('/users/' + userID[i] + '/accounts')
 					.set('authorization', login)
 					.then((res) => {
 						expect(res.text).to.contain("account_id");
@@ -81,14 +147,46 @@ describe('Tests', () => {
 					}).
 					catch(done);
 			});
+		})(i);
+	}
+
+	// Getting users with wrong token
+	for (var users = 1; users < 7; users++) {
+		(function (users) {
+			it('Unable to get users with wrong token', (done) => {
+				api.get('/users/' + userID[users])
+					.set('authorization', wrongToken)
+					.then((res) => {
+						expect(res.body).to.have.property("error", true);
+						expect(res.body).to.have.property("message", "Missing authorization token");
+						done();
+					}).
+					catch(done);
+			});
+		})(users);
+	}
+
+	// Getting accounts with wrong token
+	for (var accounts = 1; accounts < 5; accounts++) {
+		(function (accounts) {
+			it('Unable to get accounts with wrong token', (done) => {
+				api.get('/users/' + userID[accounts] + '/accounts')
+					.set('authorization', wrongToken)
+					.then((res) => {
+						expect(res.body).to.have.property("error", true);
+						expect(res.body).to.have.property("message", "Missing authorization token");
+						done();
+					}).
+					catch(done);
+			});
 		})(accounts);
 	}
 
 	// Status 200 for users pages
-	for (var users = 1; users < 7; users++) {
+	for (var users = 0; users < 6; users++) {
 		(function (users) {
 			it('Status 200 for all users', (done) => {
-				api.get('/users/' + users)
+				api.get('/users/' + userID[users])
 					.set('authorization', login)
 					.then((res) => {
 						expect(res.statusCode).to.be.equal(200);
@@ -101,10 +199,10 @@ describe('Tests', () => {
 	}
 
 	// Status 200 for accounts
-	for (accounts = 1; accounts < 5; accounts++) {
+	for (accounts = 0; accounts < 4; accounts++) {
 		(function (accounts) {
 			it('Status 200 for all accounts', (done) => {
-				api.get('/users/' + accounts + '/accounts')
+				api.get('/users/' + userID[accounts] + '/accounts')
 					.set('authorization', login)
 					.then((res) => {
 						expect(res.statusCode).to.be.equal(200);
@@ -132,7 +230,8 @@ describe('Tests', () => {
 		api.get('/users/5/accounts')
 			.set('authorization', login)
 			.then((res) => {
-				expect(res.text).to.contain("Time lords do not have accounts");
+				expect(res.body).to.have.property("error", true);
+				expect(res.body).to.have.property("message", "Time lords do not have accounts");
 				done();
 			}).
 			catch(done);
@@ -141,9 +240,12 @@ describe('Tests', () => {
 		api.get('/users/6/accounts')
 			.set('authorization', login)
 			.then((res) => {
-				expect(res.text).to.contain("Time lords do not have accounts");
+				expect(res.body).to.have.property("error", true);
+				expect(res.body).to.have.property("message", "Time lords do not have accounts");
 				done();
 			}).
 			catch(done);
 	});
+
+
 });

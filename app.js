@@ -110,7 +110,7 @@ app.listen(3000, function () {
 // Sign in to get token
 app.post('/sign-in', (req, res) => {
 	try {
-		if (req.body.password === 'password' && req.body.email) {
+		if (req.body.password === 'password' && req.body.email === 'email') { // edited to check email also
 			res.send({
 				access_token: accessToken,
 			});
